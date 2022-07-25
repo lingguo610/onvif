@@ -1,4 +1,4 @@
-module go-onvif
+module onvif
 
 go 1.18
 
