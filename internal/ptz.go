@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"log"
-	"main/onvif"
 	"net/http"
+
+	"github.com/lingguo610/onvif"
 )
 
 /****************************************************************
