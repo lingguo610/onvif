@@ -1,4 +1,4 @@
-module github.com/lingguo610/onvif
+module github.com/lingguo610/onvif/v1.0
 
 go 1.18
 
