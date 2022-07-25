@@ -46,6 +46,13 @@ type ContinuousMoveResponse struct {
 	Capabilities string `xml:"Body>ContinuousMoveResponse"`
 }
 
+type StopRequest struct {
+	XMLName      string `xml:"tptz:Stop"`
+	ProfileToken string `xml:"ProfileToken"`
+	PanTilt      bool   `xml:"PanTilt"`
+	Zoom         bool   `xml:"Zoom"`
+}
+
 /******************************************************************
 连续的速率空间用于在一个指定方向上连续移动PTZ状态
 VelocityGenericSpace 表示泛化的方位速率空间，它不涉及指定的物理范围。（左右上下移动）
@@ -86,6 +93,10 @@ func (device *OnvifDevice) PTZContinuesMove(command onvif.CommandType) error {
 	}
 	token := device.Profile.Profile[0].Token
 
+	if command == onvif.STOP {
+		return device.PTZStop()
+	}
+
 	var request ContinuousMoveRequest
 	request.ProfileToken = token
 
@@ -119,6 +130,50 @@ func (device *OnvifDevice) PTZContinuesMove(command onvif.CommandType) error {
 	httpbody := bytes.NewBufferString(soap.String())
 
 	client := &http.Client{}
+	req, err := http.NewRequest("POST", ptzAddr, httpbody)
+	if err != nil {
+		log.Println("http.NewRequest fail", err)
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
+	req.Header.Add("SOAPAction", "'http://www.onvif.org/ver20/ptz/wsdl/ContinuousMove'")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("client.Do fail", err)
+		return err
+	}
+	if resp.StatusCode != 200 {
+		log.Println("status code is not 200")
+		return errors.New("")
+	}
+
+	return nil
+}
+
+func (device *OnvifDevice) PTZStop() error {
+
+	ptzAddr := device.Capabilities.Capabilities.PTZ.XAddr
+	if ptzAddr == "" {
+		log.Println("the device do not support ptz")
+		return errors.New("the device do not support ptz")
+	}
+
+	var m StopRequest
+	m.ProfileToken = device.Profile.Profile[0].Token
+	element, err := buildElement(m)
+	if err != nil {
+		log.Println("buildElement profile fail")
+		return errors.New("buildElement profile fail")
+	}
+
+	soap := NewEmptySOAP()
+	soap.AddBodyContent(element)
+	soap.AddWSSecurity(device.User, device.Passwd)
+	httpbody := bytes.NewBufferString(soap.String())
+
+	client := &http.Client{}
+
 	req, err := http.NewRequest("POST", ptzAddr, httpbody)
 	if err != nil {
 		log.Println("http.NewRequest fail", err)
