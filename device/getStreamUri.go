@@ -31,7 +31,7 @@ type MediaUri struct {
 func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 
 	if device.Profile == nil {
-		err, _ := device.GetProfiles()
+		_ , err := device.GetProfiles()
 		if err != nil {
 			return nil, errors.New("get profile fail")
 		}
