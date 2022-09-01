@@ -57,7 +57,8 @@ func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 	soap.AddWSSecurity(device.User, device.Passwd)
 	httpbody := bytes.NewBufferString(soap.String())
 
-	endpoint := "http://" + device.DeviceIp + "/onvif/media"
+	//endpoint := "http://" + device.DeviceIp + "/onvif/media"
+	endpoint := device.Capabilities.Capabilities.Media.XAddr
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", endpoint, httpbody)
 	if err != nil {
