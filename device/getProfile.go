@@ -187,6 +187,12 @@ func (device *OnvifDevice) SetAuth(user, passwd, devIp string) {
 //请求NVT现有的媒体文件
 func (device *OnvifDevice) GetProfiles() (*ProfileResponse, error) {
 
+	if device.Capabilities == nil {
+		if _, err := device.GetCapabilities(); err != nil {
+			return nil, errors.New("device.GetCapabilities fail")
+		}
+	}
+
 	var profile ProfileRequest
 	element, err := buildElement(profile)
 	if err != nil {

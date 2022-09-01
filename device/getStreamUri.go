@@ -31,14 +31,18 @@ type MediaUri struct {
 func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 
 	if device.Profile == nil {
-		_ , err := device.GetProfiles()
+		_, err := device.GetProfiles()
 		if err != nil {
 			return nil, errors.New("get profile fail")
 		}
 	}
 
+	if device.Profile == nil {
+		return nil, errors.New("device.Profile == nil")
+	}
+
 	if len(device.Profile.Profile) <= 0 {
-		return nil, errors.New("the device has no profile")
+		return nil, errors.New("len(device.Profile.Profile) <= 0")
 	}
 	token := device.Profile.Profile[0].Token
 
