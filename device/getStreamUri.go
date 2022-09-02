@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,9 +12,9 @@ import (
 
 type StreamUriRequest struct {
 	XMLName      string `xml:"trt:GetStreamUri"`
-	Stream       string `xml:"StreamSetup>Stream"`
-	Transport    string `xml:"StreamSetup>Transport"`
-	ProfileToken string `xml:"ProfileToken"`
+	Stream       string `xml:"trt:StreamSetup>tt:Stream"`
+	Transport    string `xml:"trt:StreamSetup>tt:Transport>tt:Protocol"`
+	ProfileToken string `xml:"trt:ProfileToken"`
 }
 
 type StreamUriResponse struct {
@@ -83,6 +84,8 @@ func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 		return nil, err
 	}
 
+	fmt.Println("s: ", string(s))
+
 	ii := &StreamUriResponse{}
 
 	err = xml.Unmarshal(s, ii)
@@ -90,6 +93,7 @@ func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 		log.Println("xml.Unmarshal fail", err)
 		return nil, err
 	}
+	fmt.Println("ddd: ", ii)
 
 	device.StreamUri = ii
 
