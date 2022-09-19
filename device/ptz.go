@@ -38,7 +38,7 @@ type PanTilt struct {
 }
 
 type Zoom struct {
-	X int `xml:"x,attr"`
+	X string `xml:"x,attr"`
 }
 
 type ContinuousMoveResponse struct {
@@ -114,6 +114,10 @@ func (device *OnvifDevice) PTZContinuesMove(command onvif.CommandType) error {
 		request.Velocity.PanTilt.Y = 1
 	case onvif.DOWN:
 		request.Velocity.PanTilt.Y = -1
+	case onvif.ZOOM_IN:
+		request.Velocity.Zoom.X = "-0.500000"
+	case onvif.ZOOM_OUT:
+		request.Velocity.Zoom.X = "0.500000"
 	default:
 		request.Velocity.PanTilt.X = 0
 	}
