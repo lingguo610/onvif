@@ -32,8 +32,8 @@ type Velocity struct {
 }
 
 type PanTilt struct {
-	X     int    `xml:"x,attr"`
-	Y     int    `xml:"y,attr"`
+	X     string    `xml:"x,attr"`
+	Y     string    `xml:"y,attr"`
 	Space string `xml:"space,attr"` //云台坐标，一个空间URI表示一个根本的坐标系统
 }
 
@@ -102,24 +102,28 @@ func (device *OnvifDevice) PTZContinuesMove(command onvif.CommandType) error {
 
 	request.Velocity.PanTilt.Space = PanTiltSpaces_VelocityGenericSpace
 	request.Timeout = "PT00H01M00S"
-	request.Velocity.PanTilt.X = 0
-	request.Velocity.PanTilt.Y = 0
+	request.Velocity.PanTilt.X = "0.000000"
+	request.Velocity.PanTilt.Y = "0.000000"
 
 	switch command {
 	case onvif.LEFT:
-		request.Velocity.PanTilt.X = 1
+		request.Velocity.PanTilt.X = "-0.500000"
+		request.Velocity.Zoom.X = "0.0"
 	case onvif.RIGHT:
-		request.Velocity.PanTilt.X = -1
+		request.Velocity.PanTilt.X = "0.500000"
+		request.Velocity.Zoom.X = "0.0"
 	case onvif.UP:
-		request.Velocity.PanTilt.Y = 1
+		request.Velocity.PanTilt.Y = "0.500000"
+		request.Velocity.Zoom.X = "0.0"
 	case onvif.DOWN:
-		request.Velocity.PanTilt.Y = -1
+		request.Velocity.PanTilt.Y = "-0.500000"
+		request.Velocity.Zoom.X = "0.0"
 	case onvif.ZOOM_IN:
 		request.Velocity.Zoom.X = "-0.500000"
 	case onvif.ZOOM_OUT:
 		request.Velocity.Zoom.X = "0.500000"
 	default:
-		request.Velocity.PanTilt.X = 0
+		request.Velocity.PanTilt.X = "0.000000"
 	}
 
 	element, err := buildElement(request)
