@@ -16,7 +16,8 @@
  */
 package onvif
 
-import "./device"
+import "github.com/lingguo610/onvif/device"
+
 
 type CommandType int
 
