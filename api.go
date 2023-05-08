@@ -34,3 +34,7 @@ type DevInterface interface {
 	PTZContinuesMove(CommandType) error
 	GetMediaUri() (string, error)
 }
+
+func NewDevice() MyInterface {
+    return &device{}
+}
