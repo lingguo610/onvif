@@ -38,5 +38,5 @@ type DevInterface interface {
 }
 
 func NewDevice() DevInterface {
-    return &device.device{}
+    return &device.OnvifDevice{}
 }
