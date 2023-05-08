@@ -35,6 +35,6 @@ type DevInterface interface {
 	GetMediaUri() (string, error)
 }
 
-func NewDevice() MyInterface {
+func NewDevice() DevInterface {
     return &device{}
 }
