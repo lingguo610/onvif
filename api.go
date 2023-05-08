@@ -16,6 +16,8 @@
  */
 package onvif
 
+import "./device"
+
 type CommandType int
 
 const (
@@ -36,5 +38,5 @@ type DevInterface interface {
 }
 
 func NewDevice() DevInterface {
-    return &device{}
+    return &device.device{}
 }
