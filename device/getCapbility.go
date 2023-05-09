@@ -7,6 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"crypto/md5"
+	"fmt"
+	"io"
+	"encoding/hex"
+	"strings"
 )
 
 type CapbilityRequest struct {
@@ -117,13 +122,64 @@ func (device *OnvifDevice) GetCapabilities() (*CapbilityResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	if resp.StatusCode == 401 {
+		log.Println("resp.StatusCode == 401")
+		var authorization map[string]string = DigestAuthParams(resp)
+		realmHeader := authorization["realm"]
+		qopHeader := authorization["qop"]
+		nonceHeader := authorization["nonce"]
+		opaqueHeader := authorization["opaque"]
+		algorithm := authorization["algorithm"]
+		realm := realmHeader
+		// A1
+		h := md5.New()
+		A1 := fmt.Sprintf("%s:%s:%s", "ww", realm, "123456ab")
+		io.WriteString(h, A1)
+		HA1 := hex.EncodeToString(h.Sum(nil))
+
+		// A2
+		h = md5.New()
+		A2 := fmt.Sprintf("GET:%s", "/auth")
+		io.WriteString(h, A2)
+		HA2 := hex.EncodeToString(h.Sum(nil))
+
+		// response
+		cnonce := RandomKey()
+		response := H(strings.Join([]string{HA1, nonceHeader, nc, cnonce, qopHeader, HA2}, ":"))
+
+		// now make header
+		AuthHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s", qop=%s, nc=%s, cnonce="%s", opaque="%s", algorithm="%s"`,
+			"ww", realmHeader, nonceHeader, "/auth", response, qopHeader, nc, cnonce, opaqueHeader, algorithm)
+
+		headers := http.Header{
+			"User-Agent":      []string{userAgent},
+			"Accept":          []string{"*/*"},
+			"Accept-Encoding": []string{"identity"},
+			"Connection":      []string{"Keep-Alive"},
+			"Host":            []string{req.Host},
+			"Authorization":   []string{AuthHeader},
+		}
+		//req, err = http.NewRequest("GET", uri, nil)
+		req.Header = headers
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+	}
+	
+	log.Println("GetCapabilities resp.StatusCode:", resp.StatusCode)
+	
+	
 	if resp.StatusCode != 200 {
-		log.Println("status code is not 200")
+		log.Println("GetCapabilities status code is not 200")
 		return nil, errors.New("")
 	}
 
 	s, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+	log.Println("GetCapabilities ioutil.ReadAll fail")
 		return nil, err
 	}
 
@@ -131,9 +187,11 @@ func (device *OnvifDevice) GetCapabilities() (*CapbilityResponse, error) {
 
 	err = xml.Unmarshal(s, ii)
 	if err != nil {
-		log.Println("xml.Unmarshal fail", err)
+		log.Println("GetCapabilities xml.Unmarshal fail", err)
 		return nil, err
 	}
+	
+	log.Println("GetCapabilities sucess")
 
 	device.Capabilities = ii
 
