@@ -2,16 +2,16 @@ package device
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"crypto/md5"
-	"fmt"
-	"io"
-	"encoding/hex"
-	"strings"
 )
 
 /****************************************************************
@@ -189,13 +189,25 @@ func (device *OnvifDevice) SetAuth(user, passwd, devIp string) {
 	device.DeviceIp = devIp
 }
 
+func getCnonce() string {
+	b := make([]byte, 8)
+	io.ReadFull(rand.Reader, b)
+	return fmt.Sprintf("%x", b)[:16]
+}
+
+func getMD5(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 //请求NVT现有的媒体文件
 func (device *OnvifDevice) GetProfiles() (*ProfileResponse, error) {
 
 	if device.Capabilities == nil {
-	log.Println("device.Capabilities == nil")
+		log.Println("device.Capabilities == nil")
 		if _, err := device.GetCapabilities(); err != nil {
-		log.Println("device.GetCapabilities fail")
+			log.Println("device.GetCapabilities fail")
 			return nil, errors.New("device.GetCapabilities fail")
 		}
 	}
@@ -209,7 +221,7 @@ func (device *OnvifDevice) GetProfiles() (*ProfileResponse, error) {
 
 	soap := NewEmptySOAP()
 	soap.AddBodyContent(element)
-	soap.AddWSSecurity(device.User, device.Passwd)
+	//soap.AddWSSecurity(device.User, device.Passwd)
 	httpbody := bytes.NewBufferString(soap.String())
 
 	//endpoint := "http://" + device.DeviceIp + "/onvif/media"
@@ -226,68 +238,56 @@ func (device *OnvifDevice) GetProfiles() (*ProfileResponse, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-	log.Println("1 device.GetCapabilities fail")
+		log.Println("1 device.GetCapabilities fail")
 		return nil, err
 	}
-	
+
 	log.Println("GetProfiles resp.StatusCode:", resp.StatusCode)
-	
-	
-	if resp.StatusCode == 401 {
+
+	if resp.StatusCode == 401 || resp.StatusCode == 400 {
 		var authorization map[string]string = DigestAuthParams(resp)
 		realmHeader := authorization["realm"]
 		qopHeader := authorization["qop"]
 		nonceHeader := authorization["nonce"]
-		opaqueHeader := authorization["opaque"]
-		algorithm := authorization["algorithm"]
-		realm := realmHeader
+
 		// A1
 		h := md5.New()
-		A1 := fmt.Sprintf("%s:%s:%s", "ww", realm, "123456ab")
+		A1 := fmt.Sprintf("%s:%s:%s", device.User, realmHeader, device.Passwd)
 		io.WriteString(h, A1)
 		HA1 := hex.EncodeToString(h.Sum(nil))
 
 		// A2
 		h = md5.New()
-		A2 := fmt.Sprintf("POST:%s", "/onvif/media")
+		A2 := fmt.Sprintf("POST:%s", "/onvif/Media")
 		io.WriteString(h, A2)
 		HA2 := hex.EncodeToString(h.Sum(nil))
 
-		// response
-		cnonce := RandomKey()
-		response := H(strings.Join([]string{HA1, nonceHeader, nc, cnonce, qopHeader, HA2}, ":"))
+		cnonce := getCnonce()
+		response := getMD5(fmt.Sprintf("%s:%s:%v:%s:%s:%s", HA1, nonceHeader, nc, cnonce, qopHeader, HA2))
 
-		// now make header
-		AuthHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s", qop=%s, nc=%s, cnonce="%s", opaque="%s", algorithm="%s"`,
-			"ww", realmHeader, nonceHeader, "/onvif/media", response, qopHeader, nc, cnonce, opaqueHeader, algorithm)
+		AuthHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s", algorithm=MD5, qop=%s, nc=00000001, cnonce="%s"`,
+			device.User, realmHeader, nonceHeader, "/onvif/Media", response, qopHeader, cnonce)
 
-		headers := http.Header{
-			"User-Agent":      []string{userAgent},
-			"Accept":          []string{"*/*"},
-			"Accept-Encoding": []string{"identity"},
-			"Connection":      []string{"Keep-Alive"},
-			"Host":            []string{req.Host},
-			"Authorization":   []string{AuthHeader},
-		}
+		httpbody := bytes.NewBufferString(soap.String())
 		req, err = http.NewRequest("POST", endpoint, httpbody)
-	if err != nil {
-		log.Println("http.NewRequest fail", err)
-		return nil, err
-	}
+		if err != nil {
+			log.Println("http.NewRequest fail", err)
+			return nil, err
+		}
 
-	req.Header.Add("SOAPAction", "'http://www.onvif.org/ver10/media/wsdl/GetProfiles'")
-	req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
-		req.Header = headers
+		req.Header.Add("SOAPAction", "'http://www.onvif.org/ver10/media/wsdl/GetProfiles'")
+		req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
+		req.Header.Set("Authorization", AuthHeader)
 		resp, err = client.Do(req)
 		if err != nil {
-			log.Println(" GetProfiles client.Do fail, err", err)
+			log.Println("GetProfiles client.Do fail, err", err)
 			return nil, err
 		}
 		defer resp.Body.Close()
 	}
-	
+
 	log.Println("GetProfiles resp.StatusCode:", resp.StatusCode)
-	
+
 	if resp.StatusCode != 200 {
 		log.Println("status code is not 200")
 		return nil, errors.New("")

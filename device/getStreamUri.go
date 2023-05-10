@@ -44,34 +44,28 @@ const (
 
 func (device *OnvifDevice) getStreamUri() (*StreamUriResponse, error) {
 
-log.Println("enter getStreamUri")
-log.Println("enter getStreamUri2")
+	log.Println("enter getStreamUri")
+	log.Println("enter getStreamUri2")
 	if device.Profile == nil {
-	
-	log.Println("device.Profile == nil")
+
+		log.Println("device.Profile == nil")
 		_, err := device.GetProfiles()
 		if err != nil {
-		log.Println("device.GetProfiles fail")
+			log.Println("device.GetProfiles fail")
 			return nil, errors.New("get profile fail")
 		}
 	}
-	
-	log.Println("11111")
 
 	if device.Profile == nil {
-	log.Println("device.Profile == nil")
+		log.Println("device.Profile == nil")
 		return nil, errors.New("device.Profile == nil")
 	}
-	
-	log.Println("22222")
 
 	if len(device.Profile.Profile) <= 0 {
-	log.Println("len(device.Profile.Profile) <= 0")
+		log.Println("len(device.Profile.Profile) <= 0")
 		return nil, errors.New("len(device.Profile.Profile) <= 0")
 	}
-	
-	log.Println("33333")
-	
+
 	token := device.Profile.Profile[0].Token
 
 	var profile StreamUriRequest
@@ -83,11 +77,10 @@ log.Println("enter getStreamUri2")
 		log.Println("buildElement profile fail")
 		return nil, errors.New("buildElement profile fail")
 	}
-	log.Println("start NewRequest")
 
 	soap := NewEmptySOAP()
 	soap.AddBodyContent(element)
-	soap.AddWSSecurity(device.User, device.Passwd)
+	//soap.AddWSSecurity(device.User, device.Passwd)
 	httpbody := bytes.NewBufferString(soap.String())
 
 	endpoint := device.Capabilities.Capabilities.Media.XAddr
@@ -101,67 +94,65 @@ log.Println("enter getStreamUri2")
 	req.Header.Add("SOAPAction", "'http://www.onvif.org/ver10/media/wsdl/GetStreamUri'")
 	req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
 
-	log.Println("start client.Do")
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Println("resp.StatusCode:", resp.StatusCode)
+	log.Println("getStreamUri: resp.StatusCode:", resp.StatusCode)
 
 	if resp.StatusCode == 401 {
-		log.Println("resp.StatusCode == 401")
 		var authorization map[string]string = DigestAuthParams(resp)
 		realmHeader := authorization["realm"]
 		qopHeader := authorization["qop"]
 		nonceHeader := authorization["nonce"]
-		opaqueHeader := authorization["opaque"]
-		algorithm := authorization["algorithm"]
-		realm := realmHeader
+
 		// A1
 		h := md5.New()
-		A1 := fmt.Sprintf("%s:%s:%s", "ww", realm, "123456ab")
+		A1 := fmt.Sprintf("%s:%s:%s", device.User, realmHeader, device.Passwd)
 		io.WriteString(h, A1)
 		HA1 := hex.EncodeToString(h.Sum(nil))
 
 		// A2
 		h = md5.New()
-		A2 := fmt.Sprintf("GET:%s", "/auth")
+		A2 := fmt.Sprintf("POST:%s", "/onvif/Media")
 		io.WriteString(h, A2)
 		HA2 := hex.EncodeToString(h.Sum(nil))
 
-		// response
-		cnonce := RandomKey()
-		response := H(strings.Join([]string{HA1, nonceHeader, nc, cnonce, qopHeader, HA2}, ":"))
+		cnonce := getCnonce()
+		response := getMD5(fmt.Sprintf("%s:%s:%v:%s:%s:%s", HA1, nonceHeader, nc, cnonce, qopHeader, HA2))
 
-		// now make header
-		AuthHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s", qop=%s, nc=%s, cnonce="%s", opaque="%s", algorithm="%s"`,
-			"ww", realmHeader, nonceHeader, "/auth", response, qopHeader, nc, cnonce, opaqueHeader, algorithm)
+		AuthHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s", algorithm=MD5, qop=%s, nc=00000001, cnonce="%s"`,
+			device.User, realmHeader, nonceHeader, "/onvif/Media", response, qopHeader, cnonce)
 
-		headers := http.Header{
-			"User-Agent":      []string{userAgent},
-			"Accept":          []string{"*/*"},
-			"Accept-Encoding": []string{"identity"},
-			"Connection":      []string{"Keep-Alive"},
-			"Host":            []string{req.Host},
-			"Authorization":   []string{AuthHeader},
+		httpbody := bytes.NewBufferString(soap.String())
+		req, err = http.NewRequest("POST", endpoint, httpbody)
+		if err != nil {
+			log.Println("http.NewRequest fail", err)
+			return nil, err
 		}
-		//req, err = http.NewRequest("GET", uri, nil)
-		req.Header = headers
+
+		req.Header.Add("SOAPAction", "'http://www.onvif.org/ver10/media/wsdl/GetStreamUri'")
+		req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
+		req.Header.Set("Authorization", AuthHeader)
 		resp, err = client.Do(req)
 		if err != nil {
+			log.Println("getStreamUri: client.Do fail, err", err)
 			return nil, err
 		}
 		defer resp.Body.Close()
+
+		log.Println("getStreamUri: with auth, resp.StatusCode:", resp.StatusCode)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, errors.New("resp.StatusCode != 200")
 	}
 
 	s, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("getStreamUri response: ", string(s))
 
 	ii := &StreamUriResponse{}
 
@@ -170,7 +161,6 @@ log.Println("enter getStreamUri2")
 		log.Println("xml.Unmarshal fail", err)
 		return nil, err
 	}
-	fmt.Println("streamUri: ", ii)
 
 	device.StreamUri = ii
 
